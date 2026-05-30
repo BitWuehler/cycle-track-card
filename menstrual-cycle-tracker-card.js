@@ -58,7 +58,21 @@ const TRANSLATIONS = {
       Ovulation: "Ovulation",
       Luteal: "Luteal",
       Unknown: "Unknown"
-    }
+    },
+    ui_entity: "Cycle Tracker (Period Active sensor)",
+    ui_title: "Card title (blank = tracker name)",
+    ui_show_cycle_bar: "Show cycle progress bar",
+    ui_show_next: "Show next period date",
+    ui_show_fertile: "Show fertile window row",
+    ui_show_pms: "Show PMS window row",
+    ui_show_last: "Show last period start / end dates",
+    ui_show_stats: "Show avg cycle / period length",
+    ui_show_symptoms: "Show today's symptoms",
+    ui_show_log_buttons: "Show Log Period buttons",
+    ui_color_menstrual: "Color: Menstrual",
+    ui_color_follicular: "Color: Follicular",
+    ui_color_ovulation: "Color: Ovulation",
+    ui_color_luteal: "Color: Luteal",
   },
   de: {
     nextPeriod: "Nächste Periode",
@@ -113,7 +127,21 @@ const TRANSLATIONS = {
       Ovulation: "Eisprung",
       Luteal: "Lutealphase",
       Unknown: "Unbekannt"
-    }
+    },
+    ui_entity: "Zyklus-Tracker (Periode Aktiv Sensor)",
+    ui_title: "Kartentitel (leer = Name des Trackers)",
+    ui_show_cycle_bar: "Zyklus-Fortschrittsbalken anzeigen",
+    ui_show_next: "Nächstes Perioden-Datum anzeigen",
+    ui_show_fertile: "Fruchtbare Phase anzeigen",
+    ui_show_pms: "PMS-Phase anzeigen",
+    ui_show_last: "Start/Ende der letzten Periode anzeigen",
+    ui_show_stats: "Ø Zyklus-/Periodenlänge anzeigen",
+    ui_show_symptoms: "Heutige Symptome anzeigen",
+    ui_show_log_buttons: "Buttons zum Eintragen anzeigen",
+    ui_color_menstrual: "Farbe: Menstruation",
+    ui_color_follicular: "Farbe: Follikelphase",
+    ui_color_ovulation: "Farbe: Eisprung",
+    ui_color_luteal: "Farbe: Lutealphase",
   }
 };
 
@@ -174,26 +202,25 @@ function infoRow(icon, label, value, valueColor, entityId) {
 
 // ── Visual editor schema ───────────────────────────────────────────────────────
 
-const SCHEMA = [
+const SCHEMA = (t) => [
   {
     name: 'entity', required: true,
-    label: 'Cycle Tracker (Period Active sensor)',
+    label: t.ui_entity,
     selector: { entity: { domain: 'binary_sensor', integration: 'menstrual_cycle_tracker' } },
   },
-  { name: 'title',        label: 'Card title (blank = tracker name)',              selector: { text: {} } },
-  { name: 'show_cycle_bar',   label: 'Show cycle progress bar',            selector: { boolean: {} } },
-  { name: 'show_next',        label: 'Show next period date',              selector: { boolean: {} } },
-  { name: 'show_fertile',     label: 'Show fertile window row',            selector: { boolean: {} } },
-  { name: 'show_pms',         label: 'Show PMS window row',                selector: { boolean: {} } },
-  { name: 'show_last',        label: 'Show last period start / end dates', selector: { boolean: {} } },
-  { name: 'show_stats',       label: 'Show avg cycle / period length',     selector: { boolean: {} } },
-  { name: 'show_symptoms',    label: "Show today's symptoms",              selector: { boolean: {} } },
-  { name: 'show_log_buttons', label: 'Show Log Period buttons',            selector: { boolean: {} } },
-  { name: 'tracker',         label: 'Tracker ID (from Developer Tools → Actions)', selector: { text: {} } },
-  { name: 'color_menstrual',  label: 'Color: Menstrual (HEX, RGB, or Name)', selector: { text: {} } },
-  { name: 'color_follicular', label: 'Color: Follicular (HEX, RGB, or Name)', selector: { text: {} } },
-  { name: 'color_ovulation',  label: 'Color: Ovulation (HEX, RGB, or Name)', selector: { text: {} } },
-  { name: 'color_luteal',     label: 'Color: Luteal (HEX, RGB, or Name)',    selector: { text: {} } },
+  { name: 'title',            label: t.ui_title,            selector: { text: {} } },
+  { name: 'show_cycle_bar',   label: t.ui_show_cycle_bar,   selector: { boolean: {} } },
+  { name: 'show_next',        label: t.ui_show_next,        selector: { boolean: {} } },
+  { name: 'show_fertile',     label: t.ui_show_fertile,     selector: { boolean: {} } },
+  { name: 'show_pms',         label: t.ui_show_pms,         selector: { boolean: {} } },
+  { name: 'show_last',        label: t.ui_show_last,        selector: { boolean: {} } },
+  { name: 'show_stats',       label: t.ui_show_stats,       selector: { boolean: {} } },
+  { name: 'show_symptoms',    label: t.ui_show_symptoms,    selector: { boolean: {} } },
+  { name: 'show_log_buttons', label: t.ui_show_log_buttons, selector: { boolean: {} } },
+  { name: 'color_menstrual',  label: t.ui_color_menstrual,  selector: { color_rgb: {} } },
+  { name: 'color_follicular', label: t.ui_color_follicular, selector: { color_rgb: {} } },
+  { name: 'color_ovulation',  label: t.ui_color_ovulation,  selector: { color_rgb: {} } },
+  { name: 'color_luteal',     label: t.ui_color_luteal,     selector: { color_rgb: {} } },
 ];
 
 // ── Card ───────────────────────────────────────────────────────────────────────
@@ -264,12 +291,13 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     this._config = config;
     this._ent    = deriveEntities(config.entity);
     
-    // Setup colors
+    // Setup colors (convert RGB array to string if needed)
+    const getCol = (c) => Array.isArray(c) ? `rgb(${c.join(',')})` : c;
     this._phaseMeta = JSON.parse(JSON.stringify(DEFAULT_PHASE_META));
-    if (config.color_menstrual)  this._phaseMeta.Menstrual.color = config.color_menstrual;
-    if (config.color_follicular) this._phaseMeta.Follicular.color = config.color_follicular;
-    if (config.color_ovulation)  this._phaseMeta.Ovulation.color = config.color_ovulation;
-    if (config.color_luteal)     this._phaseMeta.Luteal.color = config.color_luteal;
+    if (config.color_menstrual)  this._phaseMeta.Menstrual.color = getCol(config.color_menstrual);
+    if (config.color_follicular) this._phaseMeta.Follicular.color = getCol(config.color_follicular);
+    if (config.color_ovulation)  this._phaseMeta.Ovulation.color = getCol(config.color_ovulation);
+    if (config.color_luteal)     this._phaseMeta.Luteal.color = getCol(config.color_luteal);
   }
 
   set hass(hass) {
@@ -790,7 +818,9 @@ class MenstrualCycleTrackerCardEditor extends HTMLElement {
   _ensureForm() {
     if (this.shadowRoot.querySelector('ha-form')) return;
     const form = document.createElement('ha-form');
-    form.schema       = SCHEMA;
+    const lang = this._hass?.language || 'en';
+    const t = lang === 'de' ? TRANSLATIONS.de : TRANSLATIONS.en;
+    form.schema       = SCHEMA(t);
     form.computeLabel = s => s.label ?? s.name;
     form.addEventListener('value-changed', e => {
       this.dispatchEvent(new CustomEvent('config-changed', {
