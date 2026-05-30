@@ -1,10 +1,123 @@
 'use strict';
 
-// ── Constants ──────────────────────────────────────────────────────────────────
+// ── Constants & Translations ───────────────────────────────────────────────────
 
 const DOMAIN = 'menstrual_cycle_tracker';
 
-const PHASE_META = {
+const TRANSLATIONS = {
+  en: {
+    nextPeriod: "Next period",
+    fertileWindow: "Fertile window",
+    pmsWindow: "PMS window",
+    lastPeriod: "Last period",
+    avgStats: "Avg cycle / period",
+    todaysSymptoms: "Today's symptoms",
+    dueToday: "Due today",
+    overdue: "overdue",
+    was: "was",
+    in: "in",
+    yesOvulation: "Yes — ovulation window",
+    yesPms: "Yes — within 5 days",
+    no: "No",
+    days: "days",
+    day: "day",
+    remaining: "remaining",
+    expectedEndToday: "Expected to end today",
+    longerThanUsual: "longer than usual",
+    logPeriodStart: "Log Period Start",
+    logPeriodEnd: "Log Period End",
+    periodStartLogged: "✓ Period start logged",
+    periodEndLogged: "✓ Period end logged",
+    cancelPeriod: "Cancel Period",
+    confirmOverwrite: "The last period started less than 15 days ago. Do you want to overwrite the previous entry?",
+    addSymptom: "Add Symptom",
+    symptom: "Symptom",
+    severity: "Severity",
+    add: "Add",
+    symptomsDict: {
+      cramps: "Cramps",
+      headache: "Headache",
+      fatigue: "Fatigue",
+      bloating: "Bloating",
+      mood_swings: "Mood Swings",
+      temperature_sensitivity: "Temperature Sensitivity",
+    },
+    severityDict: {
+      mild: "Mild",
+      moderate: "Moderate",
+      severe: "Severe",
+      very_cold: "Very cold",
+      slightly_cold: "Slightly cold",
+      normal: "Normal",
+      slightly_warm: "Slightly warm",
+      very_hot: "Very hot",
+    },
+    phases: {
+      Menstrual: "Menstrual",
+      Follicular: "Follicular",
+      Ovulation: "Ovulation",
+      Luteal: "Luteal",
+      Unknown: "Unknown"
+    }
+  },
+  de: {
+    nextPeriod: "Nächste Periode",
+    fertileWindow: "Fruchtbare Phase",
+    pmsWindow: "PMS-Phase",
+    lastPeriod: "Letzte Periode",
+    avgStats: "Ø Zyklus / Periode",
+    todaysSymptoms: "Heutige Symptome",
+    dueToday: "Heute fällig",
+    overdue: "überfällig",
+    was: "war",
+    in: "in",
+    yesOvulation: "Ja — Eisprungfenster",
+    yesPms: "Ja — innerhalb von 5 Tagen",
+    no: "Nein",
+    days: "Tage",
+    day: "Tag",
+    remaining: "verbleibend",
+    expectedEndToday: "Sollte heute enden",
+    longerThanUsual: "länger als gewöhnlich",
+    logPeriodStart: "Periode eintragen",
+    logPeriodEnd: "Periode beenden",
+    periodStartLogged: "✓ Start eingetragen",
+    periodEndLogged: "✓ Ende eingetragen",
+    cancelPeriod: "Periode löschen",
+    confirmOverwrite: "Die letzte Periode hat vor weniger als 15 Tagen begonnen. Möchtest du den vorherigen Eintrag überschreiben?",
+    addSymptom: "Symptom eintragen",
+    symptom: "Symptom",
+    severity: "Schweregrad",
+    add: "Eintragen",
+    symptomsDict: {
+      cramps: "Krämpfe",
+      headache: "Kopfschmerzen",
+      fatigue: "Müdigkeit",
+      bloating: "Blähungen",
+      mood_swings: "Stimmungsschwankungen",
+      temperature_sensitivity: "Temperaturempfinden",
+    },
+    severityDict: {
+      mild: "Leicht",
+      moderate: "Mittel",
+      severe: "Stark",
+      very_cold: "Viel zu kalt",
+      slightly_cold: "Leicht kühl",
+      normal: "Normal",
+      slightly_warm: "Leicht warm",
+      very_hot: "Viel zu heiß",
+    },
+    phases: {
+      Menstrual: "Menstruation",
+      Follicular: "Follikelphase",
+      Ovulation: "Eisprung",
+      Luteal: "Lutealphase",
+      Unknown: "Unbekannt"
+    }
+  }
+};
+
+const DEFAULT_PHASE_META = {
   Menstrual:  { color: '#e57373', bg: 'rgba(229,115,115,.15)', icon: '🩸' },
   Follicular: { color: '#66bb6a', bg: 'rgba(102,187,106,.15)', icon: '🌱' },
   Ovulation:  { color: '#ffca28', bg: 'rgba(255,202,40,.15)',  icon: '🥚' },
@@ -14,16 +127,10 @@ const PHASE_META = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/** HTML-escape a value for safe insertion. */
 const esc = v => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-
-/** Read the state string of an entity. */
 const st  = (hass, id) => hass.states[id]?.state ?? null;
-
-/** Read an attribute from an entity. */
 const att = (hass, id, key) => hass.states[id]?.attributes?.[key] ?? null;
 
-/** Derive all sibling entity IDs from the period_active binary_sensor ID. */
 function deriveEntities(periodActiveId) {
   const slug = periodActiveId.replace(/^binary_sensor\./, '').replace(/_period_active$/, '');
   return {
@@ -38,7 +145,6 @@ function deriveEntities(periodActiveId) {
   };
 }
 
-/** Format an ISO date string (YYYY-MM-DD) → "Jan 15" */
 function fmtDate(iso) {
   if (!iso) return '—';
   try {
@@ -48,8 +154,10 @@ function fmtDate(iso) {
   } catch { return iso; }
 }
 
-/** Plural suffix */
-const pl = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const pl = (n, word, t) => {
+  if (t === TRANSLATIONS.de) return `${n} ${n === 1 ? t.day : t.days}`;
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+};
 
 // ── Row builder ────────────────────────────────────────────────────────────────
 
@@ -73,8 +181,6 @@ const SCHEMA = [
     selector: { entity: { domain: 'binary_sensor', integration: 'menstrual_cycle_tracker' } },
   },
   { name: 'title',        label: 'Card title (blank = tracker name)',              selector: { text: {} } },
-  { name: 'subject',      label: 'Subject pronoun — e.g. "You", "She", "They"',   selector: { text: {} } },
-  { name: 'possessive',   label: 'Possessive — e.g. "Your", "Her", "Their"',      selector: { text: {} } },
   { name: 'show_cycle_bar',   label: 'Show cycle progress bar',            selector: { boolean: {} } },
   { name: 'show_next',        label: 'Show next period date',              selector: { boolean: {} } },
   { name: 'show_fertile',     label: 'Show fertile window row',            selector: { boolean: {} } },
@@ -82,8 +188,12 @@ const SCHEMA = [
   { name: 'show_last',        label: 'Show last period start / end dates', selector: { boolean: {} } },
   { name: 'show_stats',       label: 'Show avg cycle / period length',     selector: { boolean: {} } },
   { name: 'show_symptoms',    label: "Show today's symptoms",              selector: { boolean: {} } },
-  { name: 'show_log_buttons', label: 'Show Log Period Start / End buttons', selector: { boolean: {} } },
-  { name: 'tracker',         label: 'Tracker ID (from Developer Tools → Actions → tracker field)', selector: { text: {} } },
+  { name: 'show_log_buttons', label: 'Show Log Period buttons',            selector: { boolean: {} } },
+  { name: 'tracker',         label: 'Tracker ID (from Developer Tools → Actions)', selector: { text: {} } },
+  { name: 'color_menstrual',  label: 'Color: Menstrual (HEX, RGB, or Name)', selector: { text: {} } },
+  { name: 'color_follicular', label: 'Color: Follicular (HEX, RGB, or Name)', selector: { text: {} } },
+  { name: 'color_ovulation',  label: 'Color: Ovulation (HEX, RGB, or Name)', selector: { text: {} } },
+  { name: 'color_luteal',     label: 'Color: Luteal (HEX, RGB, or Name)',    selector: { text: {} } },
 ];
 
 // ── Card ───────────────────────────────────────────────────────────────────────
@@ -95,16 +205,28 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     this._config  = null;
     this._hass    = null;
     this._ent     = null;
-    this._pending = null; // 'start' | 'end' — log service call in-flight
+    this._pending = null; 
+    this._showAddSymptom = false;
 
-    // ── Single event-delegation listener (survives innerHTML replacements) ──
     this.shadowRoot.addEventListener('click', (e) => {
-      // Log period buttons
-      const logBtn = e.target.closest('.log-btn');
-      if (logBtn && !logBtn.disabled) {
+      // Buttons inside card
+      const btn = e.target.closest('[data-action]');
+      if (btn && !btn.disabled) {
         e.stopPropagation();
-        const action = logBtn.dataset.action;
-        if (action) this._log(action);
+        const action = btn.dataset.action;
+        if (action === 'start' || action === 'end') {
+          const dateInput = this.shadowRoot.querySelector(`#${action}-date`)?.value;
+          this._log(action, dateInput);
+        } else if (action === 'cancel_period') {
+          this._cancelPeriod();
+        } else if (action === 'toggle_symptom') {
+          this._showAddSymptom = !this._showAddSymptom;
+          this._render();
+        } else if (action === 'add_symptom') {
+          this._addSymptom();
+        } else if (action === 'delete_symptom') {
+          this._deleteSymptom(btn.dataset.symptom, btn.dataset.date);
+        }
         return;
       }
 
@@ -126,8 +248,6 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     return {
       entity: '',
       title: '',
-      subject: 'You',
-      possessive: 'Your',
       show_cycle_bar:       true,
       show_next:            true,
       show_fertile:         true,
@@ -143,57 +263,140 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     if (!config.entity) throw new Error('Set the Period Active entity in the card editor.');
     this._config = config;
     this._ent    = deriveEntities(config.entity);
+    
+    // Setup colors
+    this._phaseMeta = JSON.parse(JSON.stringify(DEFAULT_PHASE_META));
+    if (config.color_menstrual)  this._phaseMeta.Menstrual.color = config.color_menstrual;
+    if (config.color_follicular) this._phaseMeta.Follicular.color = config.color_follicular;
+    if (config.color_ovulation)  this._phaseMeta.Ovulation.color = config.color_ovulation;
+    if (config.color_luteal)     this._phaseMeta.Luteal.color = config.color_luteal;
   }
 
   set hass(hass) {
     this._hass = hass;
+    this._t = hass.language === 'de' ? TRANSLATIONS.de : TRANSLATIONS.en;
     this._render();
   }
 
   // ── Service calls ────────────────────────────────────────────────────────────
 
-  async _log(action) {
+  async _resolveTrackerId() {
+    if (this._trackerId) return this._trackerId;
+    this._trackerId = this._config.tracker || null;
+    if (!this._trackerId) {
+      try {
+        const entries = await this._hass.callWS({ type: 'config_entries/get', domain: DOMAIN });
+        if (entries?.length === 1) {
+          this._trackerId = entries[0].entry_id;
+        } else if (entries?.length > 1) {
+          const slug = this._config.entity.replace(/^binary_sensor\./, '').replace(/_period_active$/, '');
+          const match = entries.find(e => e.title.toLowerCase().replace(/\s+/g, '_') === slug);
+          this._trackerId = match?.entry_id ?? null;
+        }
+      } catch { }
+    }
+    return this._trackerId;
+  }
+
+  async _log(action, date) {
     if (this._pending) return;
+
+    if (action === 'start') {
+      const lastStartStr = att(this._hass, this._ent.periodActive, 'last_period_start');
+      if (lastStartStr) {
+        const lastStart = new Date(lastStartStr);
+        const newStart = date ? new Date(date) : new Date();
+        const diffDays = Math.abs(newStart - lastStart) / (1000 * 60 * 60 * 24);
+        if (diffDays < 15) {
+          if (!confirm(this._t.confirmOverwrite)) {
+            return;
+          }
+        }
+      }
+    }
+
     this._pending = action;
     this._render();
 
     const service = action === 'start' ? 'log_period_start' : 'log_period_end';
-
-    // Resolve config_entry_id so the integration knows which tracker to target.
-    // Priority: card config → config entries matched by entity slug
-    if (!this._trackerId) {
-      this._trackerId = this._config.tracker || null;
-
-      if (!this._trackerId) {
-        try {
-          const entries = await this._hass.callWS({
-            type: 'config_entries/get',
-            domain: DOMAIN,
-          });
-          if (entries?.length === 1) {
-            this._trackerId = entries[0].entry_id;
-          } else if (entries?.length > 1) {
-            // Match config entry title to entity slug
-            // e.g. entity binary_sensor.kenzi_period_active → slug "kenzi"
-            //      config entry title "kenzi" or "My Cycle" → normalised "my_cycle"
-            const slug = this._config.entity
-              .replace(/^binary_sensor\./, '')
-              .replace(/_period_active$/, '');
-            const match = entries.find(
-              e => e.title.toLowerCase().replace(/\s+/g, '_') === slug,
-            );
-            this._trackerId = match?.entry_id ?? null;
-          }
-        } catch { /* ignore – user can set tracker manually */ }
-      }
-    }
+    const tracker = await this._resolveTrackerId();
+    const data = tracker ? { tracker } : {};
+    if (date) data.date = date;
 
     try {
-      await this._hass.callService(
-        DOMAIN, service,
-        this._trackerId ? { tracker: this._trackerId } : {},
-      );
+      await this._hass.callService(DOMAIN, service, data);
       setTimeout(() => { this._pending = null; this._render(); }, 2500);
+    } catch {
+      this._pending = null;
+      this._render();
+    }
+  }
+
+  async _cancelPeriod() {
+    if (this._pending) return;
+    const lastStart = att(this._hass, this._ent.periodActive, 'last_period_start');
+    if (!lastStart) return;
+    
+    this._pending = 'cancel';
+    this._render();
+    
+    const tracker = await this._resolveTrackerId();
+    const data = { start_date: lastStart };
+    if (tracker) data.tracker = tracker;
+
+    try {
+      await this._hass.callService(DOMAIN, 'delete_cycle', data);
+      setTimeout(() => { this._pending = null; this._render(); }, 1500);
+    } catch {
+      this._pending = null;
+      this._render();
+    }
+  }
+
+  async _addSymptom() {
+    if (this._pending) return;
+    
+    const symptomSelect = this.shadowRoot.querySelector('#symptom-select');
+    const severitySelect = this.shadowRoot.querySelector('#severity-select');
+    const dateInput = this.shadowRoot.querySelector('#symptom-date');
+    
+    if (!symptomSelect || !symptomSelect.value) return;
+    
+    this._pending = 'symptom';
+    this._render();
+    
+    const tracker = await this._resolveTrackerId();
+    const data = { symptom: symptomSelect.value };
+    if (severitySelect && severitySelect.value) data.severity = severitySelect.value;
+    if (dateInput && dateInput.value) data.date = dateInput.value;
+    if (tracker) data.tracker = tracker;
+
+    try {
+      await this._hass.callService(DOMAIN, 'log_symptom', data);
+      setTimeout(() => { 
+        this._pending = null; 
+        this._showAddSymptom = false;
+        this._render(); 
+      }, 1500);
+    } catch {
+      this._pending = null;
+      this._render();
+    }
+  }
+
+  async _deleteSymptom(symptom, date) {
+    if (this._pending) return;
+    
+    this._pending = 'symptom';
+    this._render();
+    
+    const tracker = await this._resolveTrackerId();
+    const data = { symptom, date };
+    if (tracker) data.tracker = tracker;
+
+    try {
+      await this._hass.callService(DOMAIN, 'delete_symptom', data);
+      setTimeout(() => { this._pending = null; this._render(); }, 1500);
     } catch {
       this._pending = null;
       this._render();
@@ -202,18 +405,15 @@ class MenstrualCycleTrackerCard extends HTMLElement {
 
   _showMoreInfo(entityId) {
     if (!entityId) return;
-    const event = new CustomEvent('hass-more-info', {
-      detail: { entityId },
-      bubbles: true,
-      composed: true,
-    });
-    this.dispatchEvent(event);
+    this.dispatchEvent(new CustomEvent('hass-more-info', {
+      detail: { entityId }, bubbles: true, composed: true,
+    }));
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
   _render() {
-    const { _hass: hass, _config: cfg, _ent: e } = this;
+    const { _hass: hass, _config: cfg, _ent: e, _t: t, _phaseMeta: phaseMeta } = this;
     if (!hass || !cfg || !e) return;
 
     // ── Read entity state & attributes ──────────────────────────────────────
@@ -221,22 +421,22 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     const phase           = st(hass, e.currentPhase) ?? 'Unknown';
     const cycleDay        = parseInt(st(hass, e.cycleDay))      || null;
     const nextPeriodStr   = st(hass, e.nextPeriod);
-    const daysUntil       = att(hass, e.nextPeriod,    'days_until_next_period');  // int >= 1 | null
-    const daysOverdue     = att(hass, e.nextPeriod,    'days_overdue');             // -1 | 0 | +N
+    const daysUntil       = att(hass, e.nextPeriod,    'days_until_next_period'); 
+    const daysOverdue     = att(hass, e.nextPeriod,    'days_overdue');           
     const periodLen       = parseInt(st(hass, e.periodLength)) || 5;
     const cycleLen        = parseInt(st(hass, e.cycleLength))  || 28;
     const isFertile       = st(hass, e.fertileWindow) === 'Yes';
     const isPms           = att(hass, e.fertileWindow, 'is_pms_window') === true;
-    const daysActive      = att(hass, e.periodActive,  'days_active');              // int | null
-    const daysLeft        = att(hass, e.periodActive,  'days_left_of_period');      // int > 0 | null
-    const daysEndOverdue  = att(hass, e.periodActive,  'days_period_end_overdue');  // -1 | 0 | +N
-    const lastStart       = att(hass, e.periodActive,  'last_period_start');        // ISO | null
-    const lastEnd         = att(hass, e.periodActive,  'last_period_end');          // ISO | null
+    const daysActive      = att(hass, e.periodActive,  'days_active');            
+    const daysLeft        = att(hass, e.periodActive,  'days_left_of_period');    
+    const daysEndOverdue  = att(hass, e.periodActive,  'days_period_end_overdue');
+    const lastStart       = att(hass, e.periodActive,  'last_period_start');      
+    const lastEnd         = att(hass, e.periodActive,  'last_period_end');        
     const symptoms        = att(hass, e.todaysSymptoms,'symptoms') ?? [];
 
-    const meta = PHASE_META[phase] ?? PHASE_META.Unknown;
+    const meta = phaseMeta[phase] ?? phaseMeta.Unknown;
+    const phaseLocalized = t.phases[phase] || phase;
 
-    // Card title: config override → friendly_name (strip suffix) → fallback
     const title = esc(
       cfg.title ||
       hass.states[e.periodActive]?.attributes?.friendly_name?.replace(/ Period Active$/i, '') ||
@@ -248,28 +448,27 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     if (isActive) {
       const day  = daysActive ?? '?';
       if (daysLeft != null && daysLeft > 0) {
-        statusLine = `Day ${day} · ${pl(daysLeft, 'day')} remaining`;
+        statusLine = `${t.day} ${day} · ${pl(daysLeft, 'day', t)} ${t.remaining}`;
       } else if (daysEndOverdue != null && daysEndOverdue === 0) {
-        statusLine = `Day ${day} · Expected to end today`;
+        statusLine = `${t.day} ${day} · ${t.expectedEndToday}`;
       } else if (daysEndOverdue != null && daysEndOverdue > 0) {
-        statusLine = `Day ${day} · ${pl(daysEndOverdue, 'day')} longer than usual`;
+        statusLine = `${t.day} ${day} · ${pl(daysEndOverdue, 'day', t)} ${t.longerThanUsual}`;
       } else {
-        statusLine = `Day ${day}`;
+        statusLine = `${t.day} ${day}`;
       }
     } else {
       if (daysOverdue != null && daysOverdue === 0) {
-        statusLine = 'Period due today';
+        statusLine = t.dueToday;
       } else if (daysOverdue != null && daysOverdue > 0) {
-        statusLine = `Period ${pl(daysOverdue, 'day')} overdue`;
+        statusLine = `${pl(daysOverdue, 'day', t)} ${t.overdue}`;
       } else if (daysUntil != null && daysUntil > 0) {
-        statusLine = `Next period in ${pl(daysUntil, 'day')}`;
+        statusLine = `${t.nextPeriod} ${t.in} ${pl(daysUntil, 'day', t)}`;
       }
     }
 
     // ── Cycle progress bar ────────────────────────────────────────────────────
     let barHtml = '';
     if (cfg.show_cycle_bar !== false && cycleLen > 0) {
-      // Phase boundaries (1-indexed days, inclusive)
       const ovDay = Math.max(cycleLen - 14, periodLen + 1);
       const segs  = [
         { phase: 'Menstrual',  start: 1,          end: periodLen      },
@@ -281,15 +480,15 @@ class MenstrualCycleTrackerCard extends HTMLElement {
       const segHtml = segs.map((s, i) => {
         const w = ((s.end - s.start + 1) / cycleLen * 100).toFixed(2);
         const r = `${i === 0 ? '4px' : '0'} ${i === segs.length-1 ? '4px' : '0'} ${i === segs.length-1 ? '4px' : '0'} ${i === 0 ? '4px' : '0'}`;
-        return `<div style="width:${w}%;background:${PHASE_META[s.phase].color};border-radius:${r};height:100%"
-                     title="${s.phase}: days ${s.start}–${s.end}"></div>`;
+        return `<div style="width:${w}%;background:${phaseMeta[s.phase].color};border-radius:${r};height:100%"
+                     title="${t.phases[s.phase] || s.phase}: ${t.days} ${s.start}–${s.end}"></div>`;
       }).join('');
 
       const dotHtml = cycleDay
         ? `<div class="today-dot"
                style="left:${((cycleDay - 0.5) / cycleLen * 100).toFixed(2)}%;
                       border-color:${meta.color}">
-             <span class="today-label">day ${cycleDay}</span>
+             <span class="today-label">${t.day} ${cycleDay}</span>
            </div>`
         : '';
 
@@ -302,49 +501,83 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     if (cfg.show_next !== false) {
       let nextLabel = '—';
       if (daysOverdue != null && daysOverdue === 0) {
-        nextLabel = 'Due today';
+        nextLabel = t.dueToday;
       } else if (daysOverdue != null && daysOverdue > 0) {
-        nextLabel = `${pl(daysOverdue, 'day')} overdue`;
-        if (nextPeriodStr) nextLabel += ` · was ${nextPeriodStr}`;
+        nextLabel = `${pl(daysOverdue, 'day', t)} ${t.overdue}`;
+        if (nextPeriodStr) nextLabel += ` · ${t.was} ${nextPeriodStr}`;
       } else if (nextPeriodStr && daysUntil != null && daysUntil > 0) {
-        nextLabel = `${nextPeriodStr} · in ${pl(daysUntil, 'day')}`;
+        nextLabel = `${nextPeriodStr} · ${t.in} ${pl(daysUntil, 'day', t)}`;
       } else if (nextPeriodStr) {
         nextLabel = nextPeriodStr;
       }
-      rows.push(infoRow('mdi:calendar-clock', 'Next period', nextLabel,
+      rows.push(infoRow('mdi:calendar-clock', t.nextPeriod, nextLabel,
         (daysOverdue != null && daysOverdue >= 0) ? '#ef5350' : null, e.nextPeriod));
     }
 
     if (cfg.show_fertile !== false) {
-      rows.push(infoRow('mdi:flower-outline', 'Fertile window', isFertile ? 'Yes — ovulation window' : 'No',
+      rows.push(infoRow('mdi:flower-outline', t.fertileWindow, isFertile ? t.yesOvulation : t.no,
         isFertile ? '#66bb6a' : null, e.fertileWindow));
     }
 
     if (cfg.show_pms !== false) {
-      rows.push(infoRow('mdi:emoticon-sad-outline', 'PMS window', isPms ? 'Yes — within 5 days' : 'No',
+      rows.push(infoRow('mdi:emoticon-sad-outline', t.pmsWindow, isPms ? t.yesPms : t.no,
         isPms ? '#ab47bc' : null, e.fertileWindow));
     }
 
     if (cfg.show_last !== false && (lastStart || lastEnd)) {
-      rows.push(infoRow('mdi:calendar-range', 'Last period', `${fmtDate(lastStart)} → ${fmtDate(lastEnd)}`,
+      rows.push(infoRow('mdi:calendar-range', t.lastPeriod, `${fmtDate(lastStart)} → ${fmtDate(lastEnd)}`,
         null, e.periodActive));
     }
 
     if (cfg.show_stats !== false) {
-      rows.push(infoRow('mdi:chart-bar', 'Avg cycle / period', `${cycleLen} days / ${periodLen} days`,
+      rows.push(infoRow('mdi:chart-bar', t.avgStats, `${cycleLen} ${t.days} / ${periodLen} ${t.days}`,
         null, e.cycleLength));
     }
 
     // ── Symptoms ───────────────────────────────────────────────────────────────
     let sympHtml = '';
-    if (cfg.show_symptoms !== false && symptoms.length > 0) {
+    if (cfg.show_symptoms !== false) {
+      const today = new Date().toISOString().split('T')[0];
       const chips = symptoms.map(s => {
-        const sev = s.severity ? ` <span class="chip-sev">${esc(s.severity)}</span>` : '';
-        return `<span class="chip">${esc(s.symptom)}${sev}</span>`;
+        const sevKey = s.severity;
+        const sympKey = s.symptom;
+        const localizedSev = t.severityDict[sevKey] || sevKey;
+        const localizedSymp = t.symptomsDict[sympKey] || sympKey;
+        
+        const sev = localizedSev ? ` <span class="chip-sev">${esc(localizedSev)}</span>` : '';
+        return `<span class="chip">
+                  ${esc(localizedSymp)}${sev}
+                  <ha-icon class="chip-delete" icon="mdi:close-circle" data-action="delete_symptom" data-symptom="${esc(sympKey)}" data-date="${esc(s.date || today)}"></ha-icon>
+                </span>`;
       }).join('');
+      
+      const chipsArea = chips ? `<div class="chips">${chips}</div>` : '';
+      
+      let addSymptomArea = '';
+      if (this._showAddSymptom) {
+        addSymptomArea = `
+          <div class="add-symptom-box">
+            <input type="date" id="symptom-date" value="${today}" class="date-picker">
+            <select id="symptom-select" class="dropdown">
+              <option value="" disabled selected>${t.symptom}...</option>
+              ${Object.entries(t.symptomsDict).map(([k,v]) => `<option value="${k}">${esc(v)}</option>`).join('')}
+            </select>
+            <select id="severity-select" class="dropdown">
+              <option value="" selected>${t.severity}...</option>
+              ${Object.entries(t.severityDict).map(([k,v]) => `<option value="${k}">${esc(v)}</option>`).join('')}
+            </select>
+            <button class="add-btn" data-action="add_symptom">${this._pending === 'symptom' ? '...' : t.add}</button>
+          </div>
+        `;
+      }
+      
       sympHtml = `
-        <div class="section-label clickable" data-entity="${esc(e.todaysSymptoms)}">Today's symptoms</div>
-        <div class="chips">${chips}</div>`;
+        <div class="symptom-header">
+          <div class="section-label clickable" data-entity="${esc(e.todaysSymptoms)}">${t.todaysSymptoms}</div>
+          <ha-icon class="add-symptom-icon clickable" icon="mdi:plus-circle-outline" data-action="toggle_symptom"></ha-icon>
+        </div>
+        ${addSymptomArea}
+        ${chipsArea}`;
     }
 
     // ── Log buttons ────────────────────────────────────────────────────────────
@@ -352,29 +585,42 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     if (cfg.show_log_buttons !== false) {
       const pendStart = this._pending === 'start';
       const pendEnd   = this._pending === 'end';
+      const pendCancel= this._pending === 'cancel';
       const disabled  = this._pending ? 'disabled' : '';
       const c         = esc(meta.color);
+      const today     = new Date().toISOString().split('T')[0];
 
       if (!isActive) {
         logHtml = `
-          <button class="log-btn${pendStart ? ' done' : ''}" data-action="start"
-                  style="background:${pendStart ? '#4caf50' : c};border-color:${pendStart ? '#4caf50' : c}"
-                  ${disabled}>
-            ${pendStart ? '✓ Period start logged' : 'Log Period Start'}
-          </button>`;
+          <div class="log-combo">
+            <input type="date" id="start-date" class="date-picker" value="${today}">
+            <button class="log-btn${pendStart ? ' done' : ''}" data-action="start"
+                    style="background:${pendStart ? '#4caf50' : c};border-color:${pendStart ? '#4caf50' : c}"
+                    ${disabled}>
+              ${pendStart ? t.periodStartLogged : t.logPeriodStart}
+            </button>
+          </div>
+          `;
       } else {
         logHtml = `
-          <button class="log-btn outline${pendEnd ? ' done' : ''}" data-action="end"
-                  style="color:${pendEnd ? '#4caf50' : c};border-color:${pendEnd ? '#4caf50' : c}"
-                  ${disabled}>
-            ${pendEnd ? '✓ Period end logged' : 'Log Period End'}
-          </button>`;
+          <div class="log-combo">
+            <input type="date" id="end-date" class="date-picker" value="${today}">
+            <button class="log-btn outline${pendEnd ? ' done' : ''}" data-action="end"
+                    style="color:${pendEnd ? '#4caf50' : c};border-color:${pendEnd ? '#4caf50' : c}"
+                    ${disabled}>
+              ${pendEnd ? t.periodEndLogged : t.logPeriodEnd}
+            </button>
+          </div>
+          <div class="cancel-row">
+            <button class="cancel-btn outline" data-action="cancel_period" ${disabled}>
+              <ha-icon icon="mdi:delete-outline"></ha-icon> ${pendCancel ? '...' : t.cancelPeriod}
+            </button>
+          </div>
+          `;
       }
 
       logHtml = `<div class="log-row">${logHtml}</div>`;
     }
-
-
 
     // ── Full render ────────────────────────────────────────────────────────────
     this.shadowRoot.innerHTML = `
@@ -447,23 +693,40 @@ class MenstrualCycleTrackerCard extends HTMLElement {
           transition: background .15s;
         }
         .row ha-icon { --mdc-icon-size: 16px; color: var(--secondary-text-color); flex-shrink: 0; }
-        .row-label { font-size: .82rem; color: var(--secondary-text-color); width: 110px; flex-shrink: 0; }
+        .row-label { font-size: .82rem; color: var(--secondary-text-color); width: 120px; flex-shrink: 0; }
         .row-value { font-size: .85rem; color: var(--primary-text-color); font-weight: 500; }
 
         /* ── Symptoms ── */
-        .section-label { font-size: .75rem; color: var(--secondary-text-color); margin-bottom: 5px; }
+        .symptom-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; margin-top: 10px; }
+        .section-label { font-size: .75rem; color: var(--secondary-text-color); margin-bottom: 0; }
+        .add-symptom-icon { --mdc-icon-size: 18px; color: var(--secondary-text-color); opacity: 0.7; }
+        .add-symptom-icon:hover { opacity: 1; color: var(--primary-color); }
+        .add-symptom-box { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; background: var(--secondary-background-color); padding: 8px; border-radius: 8px; }
+        .date-picker, .dropdown { 
+          background: var(--card-background-color, white); color: var(--primary-text-color); 
+          border: 1px solid var(--divider-color); border-radius: 4px; padding: 4px; font-size: .8rem;
+          outline: none;
+        }
+        .date-picker { flex-shrink: 0; }
+        .dropdown { flex: 1; min-width: 100px; }
+        .add-btn { background: var(--primary-color); color: white; border: none; border-radius: 4px; padding: 4px 10px; font-size: .8rem; cursor: pointer; }
+        
         .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
         .chip {
           display: inline-flex; align-items: center; gap: 4px;
-          padding: 2px 10px; border-radius: 12px; font-size: .78rem;
+          padding: 2px 6px 2px 10px; border-radius: 12px; font-size: .78rem;
           background: var(--secondary-background-color); color: var(--primary-text-color);
         }
         .chip-sev { opacity: .65; font-size: .72rem; }
+        .chip-delete { --mdc-icon-size: 14px; cursor: pointer; opacity: 0.5; margin-left: 2px; }
+        .chip-delete:hover { opacity: 1; color: #ef5350; }
 
         /* ── Log buttons ── */
-        .log-row { margin-top: 6px; }
+        .log-row { margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+        .log-combo { display: flex; gap: 8px; }
+        .log-combo .date-picker { padding: 6px; font-size: .88rem; border-radius: 8px; border: 1.5px solid var(--divider-color); }
         .log-btn {
-          width: 100%; padding: 9px 0; border-radius: 8px; border: 1.5px solid;
+          flex: 1; padding: 9px 0; border-radius: 8px; border: 1.5px solid;
           font-size: .88rem; font-weight: 500; cursor: pointer;
           transition: opacity .15s, background .2s, border-color .2s, color .2s;
           background: var(--primary-color); color: white;
@@ -473,29 +736,30 @@ class MenstrualCycleTrackerCard extends HTMLElement {
         .log-btn:disabled { opacity: .55; cursor: default; }
         .log-btn:not(:disabled):hover { opacity: .85; }
 
+        .cancel-row { display: flex; justify-content: flex-end; }
+        .cancel-btn { 
+          background: transparent; color: #ef5350; border: 1px solid #ef5350; 
+          border-radius: 6px; padding: 4px 10px; font-size: .75rem; cursor: pointer; 
+          display: flex; align-items: center; gap: 4px; opacity: 0.8;
+        }
+        .cancel-btn ha-icon { --mdc-icon-size: 14px; }
+        .cancel-btn:hover { opacity: 1; background: rgba(239, 83, 80, 0.1); }
       </style>
 
       <ha-card>
-
         <div class="header">
           <div class="badge clickable" data-entity="${esc(e.currentPhase)}">
             <span class="badge-icon">${meta.icon}</span>
-            <span>${esc(phase)}</span>
+            <span>${esc(phaseLocalized)}</span>
           </div>
           <div class="card-title">${title}</div>
-          ${cycleDay ? `<div class="cycle-day-chip clickable" data-entity="${esc(e.cycleDay)}">Day ${cycleDay} of ${cycleLen}</div>` : ''}
+          ${cycleDay ? `<div class="cycle-day-chip clickable" data-entity="${esc(e.cycleDay)}">${t.day} ${cycleDay} / ${cycleLen}</div>` : ''}
         </div>
-
         ${statusLine ? `<div class="status">${esc(statusLine)}</div>` : '<div style="height:12px"></div>'}
-
         ${barHtml}
-
         <div class="rows">${rows.join('')}</div>
-
         ${sympHtml}
-
         ${logHtml}
-
       </ha-card>
     `;
   }
@@ -512,20 +776,17 @@ class MenstrualCycleTrackerCardEditor extends HTMLElement {
     this._config = null;
     this._hass   = null;
   }
-
   set hass(hass) {
     this._hass = hass;
     const form = this.shadowRoot.querySelector('ha-form');
     if (form) form.hass = hass;
   }
-
   setConfig(config) {
     this._config = config;
     this._ensureForm();
     const form = this.shadowRoot.querySelector('ha-form');
     form.data  = this._config;
   }
-
   _ensureForm() {
     if (this.shadowRoot.querySelector('ha-form')) return;
     const form = document.createElement('ha-form');
@@ -533,8 +794,7 @@ class MenstrualCycleTrackerCardEditor extends HTMLElement {
     form.computeLabel = s => s.label ?? s.name;
     form.addEventListener('value-changed', e => {
       this.dispatchEvent(new CustomEvent('config-changed', {
-        detail: { config: e.detail.value },
-        bubbles: true, composed: true,
+        detail: { config: e.detail.value }, bubbles: true, composed: true,
       }));
     });
     this.shadowRoot.appendChild(form);
@@ -546,7 +806,6 @@ class MenstrualCycleTrackerCardEditor extends HTMLElement {
 
 customElements.define('menstrual-cycle-tracker-card', MenstrualCycleTrackerCard);
 customElements.define('menstrual-cycle-tracker-card-editor', MenstrualCycleTrackerCardEditor);
-
 window.customCards ??= [];
 window.customCards.push({
   type:        'menstrual-cycle-tracker-card',
