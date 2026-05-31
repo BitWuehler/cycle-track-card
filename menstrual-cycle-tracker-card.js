@@ -433,16 +433,19 @@ class MenstrualCycleTrackerCard extends HTMLElement {
   async _addSymptom() {
     if (this._pending) return;
     
-    const symptomInput = this.shadowRoot.querySelector('#symptom-input');
+    const symptomSelect = this.shadowRoot.querySelector('#symptom-select');
+    const symptomCustomInput = this.shadowRoot.querySelector('#symptom-custom-input');
     const severitySelect = this.shadowRoot.querySelector('#severity-select');
     const dateInput = this.shadowRoot.querySelector('#symptom-date');
     
-    const rawVal = symptomInput?.value?.trim();
-    if (!rawVal) return;
+    if (!symptomSelect || !symptomSelect.value) return;
     
-    // Send the internal key if it matches a predefined localized string, otherwise send the custom string
-    const tDict = this._t.symptomsDict;
-    const sympKey = Object.keys(tDict).find(k => tDict[k] === rawVal) || rawVal;
+    let sympKey = symptomSelect.value;
+    if (sympKey === '__custom__') {
+      const rawVal = symptomCustomInput?.value?.trim();
+      if (!rawVal) return;
+      sympKey = rawVal;
+    }
     
     this._pending = 'symptom';
     this._render();
@@ -640,10 +643,12 @@ class MenstrualCycleTrackerCard extends HTMLElement {
         addSymptomArea = `
           <div class="add-symptom-box">
             <input type="date" id="symptom-date" value="${today}" class="date-picker">
-            <input type="text" id="symptom-input" list="symptom-list" class="dropdown" placeholder="${t.symptom}...">
-            <datalist id="symptom-list">
-              ${Object.entries(t.symptomsDict).map(([k,v]) => `<option value="${esc(v)}"></option>`).join('')}
-            </datalist>
+            <select id="symptom-select" class="dropdown">
+              <option value="" disabled selected>${t.symptom}...</option>
+              ${Object.entries(t.symptomsDict).map(([k,v]) => `<option value="${k}">${esc(v)}</option>`).join('')}
+              <option value="__custom__">Anderes / Eigener Text...</option>
+            </select>
+            <input type="text" id="symptom-custom-input" class="dropdown" placeholder="Symptom eingeben..." style="display:none; margin-top:8px;">
             <select id="severity-select" class="dropdown">
               <option value="" selected>${t.severity}...</option>
               ${Object.entries(t.severityDict).map(([k,v]) => `<option value="${k}">${esc(v)}</option>`).join('')}
@@ -838,6 +843,22 @@ class MenstrualCycleTrackerCard extends HTMLElement {
         ${logHtml}
       </ha-card>
     `;
+
+    // ── Setup listeners ────────────────────────────────────────────────────────
+    const symptomSelect = this.shadowRoot.getElementById('symptom-select');
+    if (symptomSelect) {
+      symptomSelect.addEventListener('change', (e) => {
+        const customInput = this.shadowRoot.getElementById('symptom-custom-input');
+        if (customInput) {
+          if (e.target.value === '__custom__') {
+            customInput.style.display = 'block';
+            customInput.focus();
+          } else {
+            customInput.style.display = 'none';
+          }
+        }
+      });
+    }
   }
 
   getCardSize() { return 4; }
