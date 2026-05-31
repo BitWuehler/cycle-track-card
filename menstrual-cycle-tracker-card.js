@@ -53,11 +53,11 @@ const TRANSLATIONS = {
       very_hot: "Very hot",
     },
     phases: {
-      Menstrual: "Menstrual",
-      Follicular: "Follicular",
-      Ovulation: "Ovulation",
-      Luteal: "Luteal",
-      Unknown: "Unknown"
+      menstrual: "Menstrual",
+      follicular: "Follicular",
+      ovulation: "Ovulation",
+      luteal: "Luteal",
+      unknown: "Unknown"
     },
     ui_entity: "Cycle Tracker (Period Active sensor)",
     ui_title: "Card title (blank = tracker name)",
@@ -122,11 +122,11 @@ const TRANSLATIONS = {
       very_hot: "Viel zu heiß",
     },
     phases: {
-      Menstrual: "Menstruation",
-      Follicular: "Follikelphase",
-      Ovulation: "Eisprung",
-      Luteal: "Lutealphase",
-      Unknown: "Unbekannt"
+      menstrual: "Menstruation",
+      follicular: "Follikelphase",
+      ovulation: "Eisprung",
+      luteal: "Lutealphase",
+      unknown: "Unbekannt"
     },
     ui_entity: "Zyklus-Tracker (Periode Aktiv Sensor)",
     ui_title: "Kartentitel (leer = Name des Trackers)",
@@ -146,11 +146,11 @@ const TRANSLATIONS = {
 };
 
 const DEFAULT_PHASE_META = {
-  Menstrual:  { color: '#e57373', bg: 'rgba(229,115,115,.15)', icon: '🩸' },
-  Follicular: { color: '#66bb6a', bg: 'rgba(102,187,106,.15)', icon: '🌱' },
-  Ovulation:  { color: '#ffca28', bg: 'rgba(255,202,40,.15)',  icon: '🥚' },
-  Luteal:     { color: '#ab47bc', bg: 'rgba(171,71,188,.15)',  icon: '🌙' },
-  Unknown:    { color: 'var(--secondary-text-color)', bg: 'rgba(0,0,0,.06)', icon: '—' },
+  menstrual:  { color: '#e57373', bg: 'rgba(229,115,115,.15)', icon: '🩸' },
+  follicular: { color: '#66bb6a', bg: 'rgba(102,187,106,.15)', icon: '🌱' },
+  ovulation:  { color: '#ffca28', bg: 'rgba(255,202,40,.15)',  icon: '🥚' },
+  luteal:     { color: '#ab47bc', bg: 'rgba(171,71,188,.15)',  icon: '🌙' },
+  unknown:    { color: 'var(--secondary-text-color)', bg: 'rgba(0,0,0,.06)', icon: '—' },
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -217,6 +217,7 @@ const SCHEMA = (t) => [
   { name: 'show_stats',       label: t.ui_show_stats,       selector: { boolean: {} } },
   { name: 'show_symptoms',    label: t.ui_show_symptoms,    selector: { boolean: {} } },
   { name: 'show_log_buttons', label: t.ui_show_log_buttons, selector: { boolean: {} } },
+  { name: 'tracker',          label: 'Tracker ID (Optional)', selector: { config_entry: { integration: 'menstrual_cycle_tracker' } } },
   { name: 'color_menstrual',  label: t.ui_color_menstrual,  selector: { color_rgb: {} } },
   { name: 'color_follicular', label: t.ui_color_follicular, selector: { color_rgb: {} } },
   { name: 'color_ovulation',  label: t.ui_color_ovulation,  selector: { color_rgb: {} } },
@@ -294,16 +295,30 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     // Setup colors (convert RGB array to string if needed)
     const getCol = (c) => Array.isArray(c) ? `rgb(${c.join(',')})` : c;
     this._phaseMeta = JSON.parse(JSON.stringify(DEFAULT_PHASE_META));
-    if (config.color_menstrual)  this._phaseMeta.Menstrual.color = getCol(config.color_menstrual);
-    if (config.color_follicular) this._phaseMeta.Follicular.color = getCol(config.color_follicular);
-    if (config.color_ovulation)  this._phaseMeta.Ovulation.color = getCol(config.color_ovulation);
-    if (config.color_luteal)     this._phaseMeta.Luteal.color = getCol(config.color_luteal);
+    if (config.color_menstrual)  this._phaseMeta.menstrual.color = getCol(config.color_menstrual);
+    if (config.color_follicular) this._phaseMeta.follicular.color = getCol(config.color_follicular);
+    if (config.color_ovulation)  this._phaseMeta.ovulation.color = getCol(config.color_ovulation);
+    if (config.color_luteal)     this._phaseMeta.luteal.color = getCol(config.color_luteal);
   }
 
   set hass(hass) {
     this._hass = hass;
     this._t = hass.language === 'de' ? TRANSLATIONS.de : TRANSLATIONS.en;
-    this._render();
+    
+    // Prevent dropdown closing: only re-render if entity states actually changed
+    if (this._ent) {
+      const stateHash = Object.values(this._ent).map(id => {
+        const s = hass.states[id];
+        return s ? `${s.state}|${JSON.stringify(s.attributes)}` : 'null';
+      }).join('||');
+      
+      if (this._lastStateHash !== stateHash) {
+        this._lastStateHash = stateHash;
+        this._render();
+      }
+    } else {
+      this._render();
+    }
   }
 
   // ── Service calls ────────────────────────────────────────────────────────────
@@ -446,7 +461,7 @@ class MenstrualCycleTrackerCard extends HTMLElement {
 
     // ── Read entity state & attributes ──────────────────────────────────────
     const isActive        = st(hass, e.periodActive) === 'on';
-    const phase           = st(hass, e.currentPhase) ?? 'Unknown';
+    const phase           = (st(hass, e.currentPhase) ?? 'unknown').toLowerCase();
     const cycleDay        = parseInt(st(hass, e.cycleDay))      || null;
     const nextPeriodStr   = st(hass, e.nextPeriod);
     const daysUntil       = att(hass, e.nextPeriod,    'days_until_next_period'); 
@@ -462,7 +477,7 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     const lastEnd         = att(hass, e.periodActive,  'last_period_end');        
     const symptoms        = att(hass, e.todaysSymptoms,'symptoms') ?? [];
 
-    const meta = phaseMeta[phase] ?? phaseMeta.Unknown;
+    const meta = phaseMeta[phase] ?? phaseMeta.unknown;
     const phaseLocalized = t.phases[phase] || phase;
 
     const title = esc(
@@ -499,10 +514,10 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     if (cfg.show_cycle_bar !== false && cycleLen > 0) {
       const ovDay = Math.max(cycleLen - 14, periodLen + 1);
       const segs  = [
-        { phase: 'Menstrual',  start: 1,          end: periodLen      },
-        { phase: 'Follicular', start: periodLen+1, end: ovDay-2        },
-        { phase: 'Ovulation',  start: ovDay-1,     end: ovDay+2        },
-        { phase: 'Luteal',     start: ovDay+3,     end: cycleLen       },
+        { phase: 'menstrual',  start: 1,          end: periodLen      },
+        { phase: 'follicular', start: periodLen+1, end: ovDay-2        },
+        { phase: 'ovulation',  start: ovDay-1,     end: ovDay+2        },
+        { phase: 'luteal',     start: ovDay+3,     end: cycleLen       },
       ].filter(s => s.end >= s.start);
 
       const segHtml = segs.map((s, i) => {
@@ -726,36 +741,34 @@ class MenstrualCycleTrackerCard extends HTMLElement {
 
         /* ── Symptoms ── */
         .symptom-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; margin-top: 10px; }
-        .section-label { font-size: .75rem; color: var(--secondary-text-color); margin-bottom: 0; }
-        .add-symptom-icon { --mdc-icon-size: 18px; color: var(--secondary-text-color); opacity: 0.7; }
+        .section-label { font-size: .85rem; color: var(--secondary-text-color); margin-bottom: 0; }
+        .add-symptom-icon { --mdc-icon-size: 28px; color: var(--secondary-text-color); opacity: 0.7; }
         .add-symptom-icon:hover { opacity: 1; color: var(--primary-color); }
-        .add-symptom-box { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; background: var(--secondary-background-color); padding: 8px; border-radius: 8px; }
+        .add-symptom-box { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; background: var(--secondary-background-color); padding: 12px; border-radius: 8px; }
         .date-picker, .dropdown { 
           background: var(--card-background-color, white); color: var(--primary-text-color); 
-          border: 1px solid var(--divider-color); border-radius: 4px; padding: 4px; font-size: .8rem;
-          outline: none;
+          border: 1px solid var(--divider-color); border-radius: 6px; padding: 10px; font-size: 1rem;
+          outline: none; width: 100%; box-sizing: border-box; min-height: 44px;
         }
-        .date-picker { flex-shrink: 0; }
-        .dropdown { flex: 1; min-width: 100px; }
-        .add-btn { background: var(--primary-color); color: white; border: none; border-radius: 4px; padding: 4px 10px; font-size: .8rem; cursor: pointer; }
+        .add-btn { background: var(--primary-color); color: white; border: none; border-radius: 6px; padding: 12px; font-size: 1rem; cursor: pointer; min-height: 44px; font-weight: 500; }
         
-        .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+        .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
         .chip {
           display: inline-flex; align-items: center; gap: 4px;
-          padding: 2px 6px 2px 10px; border-radius: 12px; font-size: .78rem;
+          padding: 6px 10px; border-radius: 16px; font-size: .85rem;
           background: var(--secondary-background-color); color: var(--primary-text-color);
         }
-        .chip-sev { opacity: .65; font-size: .72rem; }
-        .chip-delete { --mdc-icon-size: 14px; cursor: pointer; opacity: 0.5; margin-left: 2px; }
+        .chip-sev { opacity: .65; font-size: .8rem; }
+        .chip-delete { --mdc-icon-size: 18px; cursor: pointer; opacity: 0.5; margin-left: 2px; }
         .chip-delete:hover { opacity: 1; color: #ef5350; }
 
         /* ── Log buttons ── */
-        .log-row { margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
-        .log-combo { display: flex; gap: 8px; }
-        .log-combo .date-picker { padding: 6px; font-size: .88rem; border-radius: 8px; border: 1.5px solid var(--divider-color); }
+        .log-row { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+        .log-combo { display: flex; gap: 8px; align-items: stretch; }
+        .log-combo .date-picker { padding: 10px; font-size: 1rem; border-radius: 8px; border: 1.5px solid var(--divider-color); flex: 0 0 130px; }
         .log-btn {
-          flex: 1; padding: 9px 0; border-radius: 8px; border: 1.5px solid;
-          font-size: .88rem; font-weight: 500; cursor: pointer;
+          flex: 1; padding: 12px 0; border-radius: 8px; border: 1.5px solid;
+          font-size: 1rem; font-weight: 500; cursor: pointer;
           transition: opacity .15s, background .2s, border-color .2s, color .2s;
           background: var(--primary-color); color: white;
         }
