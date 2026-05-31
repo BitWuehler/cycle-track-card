@@ -433,17 +433,22 @@ class MenstrualCycleTrackerCard extends HTMLElement {
   async _addSymptom() {
     if (this._pending) return;
     
-    const symptomSelect = this.shadowRoot.querySelector('#symptom-select');
+    const symptomInput = this.shadowRoot.querySelector('#symptom-input');
     const severitySelect = this.shadowRoot.querySelector('#severity-select');
     const dateInput = this.shadowRoot.querySelector('#symptom-date');
     
-    if (!symptomSelect || !symptomSelect.value) return;
+    const rawVal = symptomInput?.value?.trim();
+    if (!rawVal) return;
+    
+    // Send the internal key if it matches a predefined localized string, otherwise send the custom string
+    const tDict = this._t.symptomsDict;
+    const sympKey = Object.keys(tDict).find(k => tDict[k] === rawVal) || rawVal;
     
     this._pending = 'symptom';
     this._render();
     
     const tracker = await this._resolveTrackerId();
-    const data = { symptom: symptomSelect.value };
+    const data = { symptom: sympKey };
     if (severitySelect && severitySelect.value) data.severity = severitySelect.value;
     if (dateInput && dateInput.value) data.date = dateInput.value;
     if (tracker) data.tracker = tracker;
@@ -635,10 +640,10 @@ class MenstrualCycleTrackerCard extends HTMLElement {
         addSymptomArea = `
           <div class="add-symptom-box">
             <input type="date" id="symptom-date" value="${today}" class="date-picker">
-            <select id="symptom-select" class="dropdown">
-              <option value="" disabled selected>${t.symptom}...</option>
-              ${Object.entries(t.symptomsDict).map(([k,v]) => `<option value="${k}">${esc(v)}</option>`).join('')}
-            </select>
+            <input type="text" id="symptom-input" list="symptom-list" class="dropdown" placeholder="${t.symptom}...">
+            <datalist id="symptom-list">
+              ${Object.entries(t.symptomsDict).map(([k,v]) => `<option value="${esc(v)}"></option>`).join('')}
+            </datalist>
             <select id="severity-select" class="dropdown">
               <option value="" selected>${t.severity}...</option>
               ${Object.entries(t.severityDict).map(([k,v]) => `<option value="${k}">${esc(v)}</option>`).join('')}
@@ -709,13 +714,6 @@ class MenstrualCycleTrackerCard extends HTMLElement {
 
         /* ── Header ── */
         .header { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
-        .badge {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 3px 10px; border-radius: 20px; font-size: .75rem; font-weight: 600;
-          background: ${esc(meta.bg)}; color: ${esc(meta.color)};
-          white-space: nowrap;
-        }
-        .badge-icon { font-size: .95rem; }
         .card-title {
           flex: 1; font-size: 1.05rem; font-weight: 600;
           color: var(--primary-text-color); overflow: hidden;
@@ -830,10 +828,6 @@ class MenstrualCycleTrackerCard extends HTMLElement {
 
       <ha-card>
         <div class="header">
-          <div class="badge clickable" data-entity="${esc(e.currentPhase)}">
-            <span class="badge-icon">${meta.icon}</span>
-            <span>${esc(phaseLocalized)}</span>
-          </div>
           <div class="card-title">${title}</div>
           ${cycleDay ? `<div class="cycle-day-chip clickable" data-entity="${esc(e.cycleDay)}">${t.day} ${cycleDay} / ${cycleLen}</div>` : ''}
         </div>
