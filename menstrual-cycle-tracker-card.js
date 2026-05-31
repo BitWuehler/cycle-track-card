@@ -159,17 +159,46 @@ const esc = v => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 const st  = (hass, id) => hass.states[id]?.state ?? null;
 const att = (hass, id, key) => hass.states[id]?.attributes?.[key] ?? null;
 
-function deriveEntities(periodActiveId) {
-  const slug = periodActiveId.replace(/^binary_sensor\./, '').replace(/_period_active$/, '');
+function deriveEntities(hass, periodActiveId) {
+  const defaultDerive = () => {
+    const slug = periodActiveId.replace(/^binary_sensor\./, '').replace(/_period_active$/, '');
+    return {
+      periodActive:   periodActiveId,
+      currentPhase:   `sensor.${slug}_current_phase`,
+      cycleDay:       `sensor.${slug}_cycle_day`,
+      nextPeriod:     `sensor.${slug}_next_period`,
+      periodLength:   `sensor.${slug}_period_length`,
+      cycleLength:    `sensor.${slug}_cycle_length`,
+      fertileWindow:  `sensor.${slug}_fertile_window`,
+      todaysSymptoms: `sensor.${slug}_todays_symptoms`,
+    };
+  };
+
+  if (!hass || !hass.entities || !hass.entities[periodActiveId]) return defaultDerive();
+  
+  const baseEntity = hass.entities[periodActiveId];
+  if (!baseEntity.unique_id) return defaultDerive();
+
+  const entryId = baseEntity.unique_id.replace(/_period_active$/, '');
+  
+  const findBySuffix = (suffix) => {
+    const targetUniqueId = `${entryId}_${suffix}`;
+    for (const [id, entity] of Object.entries(hass.entities)) {
+      if (entity.unique_id === targetUniqueId) return id;
+    }
+    const slug = periodActiveId.replace(/^binary_sensor\./, '').replace(/_period_active$/, '');
+    return `sensor.${slug}_${suffix}`;
+  };
+
   return {
     periodActive:   periodActiveId,
-    currentPhase:   `sensor.${slug}_current_phase`,
-    cycleDay:       `sensor.${slug}_cycle_day`,
-    nextPeriod:     `sensor.${slug}_next_period`,
-    periodLength:   `sensor.${slug}_period_length`,
-    cycleLength:    `sensor.${slug}_cycle_length`,
-    fertileWindow:  `sensor.${slug}_fertile_window`,
-    todaysSymptoms: `sensor.${slug}_todays_symptoms`,
+    currentPhase:   findBySuffix('current_phase'),
+    cycleDay:       findBySuffix('cycle_day'),
+    nextPeriod:     findBySuffix('next_period'),
+    periodLength:   findBySuffix('period_length'),
+    cycleLength:    findBySuffix('cycle_length'),
+    fertileWindow:  findBySuffix('fertile_window'),
+    todaysSymptoms: findBySuffix('todays_symptoms'),
   };
 }
 
@@ -290,7 +319,7 @@ class MenstrualCycleTrackerCard extends HTMLElement {
   setConfig(config) {
     if (!config.entity) throw new Error('Set the Period Active entity in the card editor.');
     this._config = config;
-    this._ent    = deriveEntities(config.entity);
+    this._entDerived = false;
     
     // Setup colors (convert RGB array to string if needed)
     const getCol = (c) => Array.isArray(c) ? `rgb(${c.join(',')})` : c;
@@ -305,6 +334,11 @@ class MenstrualCycleTrackerCard extends HTMLElement {
     this._hass = hass;
     this._t = hass.language === 'de' ? TRANSLATIONS.de : TRANSLATIONS.en;
     
+    if (!this._entDerived && hass.entities) {
+      this._ent = deriveEntities(hass, this._config.entity);
+      this._entDerived = true;
+    }
+
     // Prevent dropdown closing: only re-render if entity states actually changed
     if (this._ent) {
       const stateHash = Object.values(this._ent).map(id => {
@@ -617,7 +651,9 @@ class MenstrualCycleTrackerCard extends HTMLElement {
       sympHtml = `
         <div class="symptom-header">
           <div class="section-label clickable" data-entity="${esc(e.todaysSymptoms)}">${t.todaysSymptoms}</div>
-          <ha-icon class="add-symptom-icon clickable" icon="mdi:plus-circle-outline" data-action="toggle_symptom"></ha-icon>
+          <button class="add-symptom-icon clickable" data-action="toggle_symptom">
+            <ha-icon icon="${this._showAddSymptom ? 'mdi:minus' : 'mdi:plus'}"></ha-icon>
+          </button>
         </div>
         ${addSymptomArea}
         ${chipsArea}`;
@@ -742,8 +778,13 @@ class MenstrualCycleTrackerCard extends HTMLElement {
         /* ── Symptoms ── */
         .symptom-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; margin-top: 10px; }
         .section-label { font-size: .85rem; color: var(--secondary-text-color); margin-bottom: 0; }
-        .add-symptom-icon { --mdc-icon-size: 28px; color: var(--secondary-text-color); opacity: 0.7; }
-        .add-symptom-icon:hover { opacity: 1; color: var(--primary-color); }
+        .add-symptom-icon { 
+          background: var(--secondary-background-color); border: none; border-radius: 50%;
+          width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+          color: var(--secondary-text-color); cursor: pointer; transition: all 0.2s;
+        }
+        .add-symptom-icon ha-icon { --mdc-icon-size: 20px; }
+        .add-symptom-icon:hover { background: var(--primary-color); color: white; }
         .add-symptom-box { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; background: var(--secondary-background-color); padding: 12px; border-radius: 8px; }
         .date-picker, .dropdown { 
           background: var(--card-background-color, white); color: var(--primary-text-color); 
